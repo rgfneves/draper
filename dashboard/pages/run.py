@@ -555,22 +555,26 @@ def render(conn) -> None:
     import pandas as pd
     from datetime import datetime, timezone
 
-    scraped_rows = conn.execute(
-        """
-        SELECT c.id, c.username, c.display_name, c.followers, c.niche,
-               c.email, c.link_in_bio, c.avg_engagement, c.posts_last_30_days,
-               c.bio, c.category, c.status,
-               COUNT(p.id) AS post_count,
-               MAX(o.contacted_at) AS contacted_at
-        FROM creators c
-        JOIN posts p ON p.creator_id = c.id
-        LEFT JOIN outreach o ON o.creator_id = c.id
-        WHERE c.platform = %s AND c.status != 'excluded'
-        GROUP BY c.id
-        ORDER BY c.followers DESC
-        """,
-        (platform,),
-    ).fetchall()
+    if filtered_ids:
+        _fid_placeholders = ",".join(["%s"] * len(filtered_ids))
+        scraped_rows = conn.execute(
+            f"""
+            SELECT c.id, c.username, c.display_name, c.followers, c.niche,
+                   c.email, c.link_in_bio, c.avg_engagement, c.posts_last_30_days,
+                   c.bio, c.category, c.status,
+                   COUNT(p.id) AS post_count,
+                   MAX(o.contacted_at) AS contacted_at
+            FROM creators c
+            JOIN posts p ON p.creator_id = c.id
+            LEFT JOIN outreach o ON o.creator_id = c.id
+            WHERE c.id IN ({_fid_placeholders})
+            GROUP BY c.id
+            ORDER BY c.followers DESC
+            """,
+            tuple(filtered_ids),
+        ).fetchall()
+    else:
+        scraped_rows = []
 
     if scraped_rows:
         df_scraped = pd.DataFrame([dict(r) for r in scraped_rows])
