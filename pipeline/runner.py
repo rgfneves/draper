@@ -139,6 +139,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Comma-separated creator IDs to restrict AI filter (default: all eligible creators)",
     )
+    parser.add_argument(
+        "--force-reeval",
+        action="store_true",
+        help="Re-evaluate creators even if ai_filter_pass is already set (overwrites previous results)",
+    )
     return parser
 
 
@@ -176,6 +181,7 @@ def main(argv: list[str] | None = None) -> None:
         if filter_excluded_cats_raw else None
     )
     ai_criteria: str | None = args.ai_criteria
+    force_reeval: bool = args.force_reeval
     creator_ids_raw = args.creator_ids
     allowed_creator_ids: set[int] | None = (
         {int(x.strip()) for x in creator_ids_raw.split(",") if x.strip()}
@@ -432,7 +438,9 @@ def main(argv: list[str] | None = None) -> None:
             db_creators = get_all_creators(conn, platform=platform)
             to_filter = []
             for c in db_creators:
-                if c.status == "excluded" or c.ai_filter_pass is not None:
+                if c.status == "excluded":
+                    continue
+                if c.ai_filter_pass is not None and not force_reeval:
                     continue
 
                 # Restrict to explicit creator IDs if provided (from dashboard filter)

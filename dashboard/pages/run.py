@@ -714,6 +714,7 @@ def render(conn) -> None:
                     "--platform", platform,
                     "--skip-scrape",
                     "--max-ai-filter", str(max_ai),
+                    "--force-reeval",
                 ]
                 if filtered_ids:
                     ai_args += ["--creator-ids", ",".join(str(i) for i in filtered_ids)]

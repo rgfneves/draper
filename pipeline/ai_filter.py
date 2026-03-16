@@ -62,12 +62,13 @@ def evaluate_creator(
 
     try:
         full_message = f"{_build_system_prompt(criteria)}\n\n---\n\n{user_message}"
+        logger.debug("AI filter sending prompt [%d chars]: %r", len(full_message), full_message[:300])
         response = client.chat.completions.create(
             model=GPT_FILTER_MODEL,
             messages=[
                 {"role": "user", "content": full_message},
             ],
-            max_completion_tokens=80,
+            max_completion_tokens=200,
         )
         content = response.choices[0].message.content or "{}"
         logger.info("AI filter raw response [model=%s]: %r", GPT_FILTER_MODEL, content)
