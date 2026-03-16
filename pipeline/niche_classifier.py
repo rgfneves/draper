@@ -35,7 +35,6 @@ def classify_niche(captions: list[str], hashtags: list[str]) -> str:
             model=GPT_NICHE_MODEL,
             messages=[{"role": "user", "content": prompt}],
             max_completion_tokens=20,
-            temperature=0.0,
         )
         niche = response.choices[0].message.content.strip()
         logger.debug("Classified niche: %s", niche)

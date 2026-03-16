@@ -60,15 +60,13 @@ def evaluate_creator(
     )
 
     try:
+        full_message = f"{_build_system_prompt(criteria)}\n\n---\n\n{user_message}"
         response = client.chat.completions.create(
             model=GPT_FILTER_MODEL,
             messages=[
-                {"role": "system", "content": _build_system_prompt(criteria)},
-                {"role": "user", "content": user_message},
+                {"role": "user", "content": full_message},
             ],
             max_completion_tokens=80,
-            temperature=0.0,
-            response_format={"type": "json_object"},
         )
         content = response.choices[0].message.content or "{}"
         data = json.loads(content)
