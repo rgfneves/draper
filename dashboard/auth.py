@@ -36,9 +36,11 @@ def _redirect_uri() -> str:
     """
     The redirect URI must match exactly what's registered in Google Cloud Console.
     Streamlit serves the app at root (/), so we redirect back to root with query params.
+    Set OAUTH_REDIRECT_URI explicitly in Render environment variables to avoid mismatches.
     """
-    if os.getenv("RENDER"):
-        return "https://draper-cxg5.onrender.com/"
+    explicit = os.getenv("OAUTH_REDIRECT_URI", "")
+    if explicit:
+        return explicit
     return "http://localhost:8501/"
 
 
@@ -131,9 +133,9 @@ def _show_login_page() -> None:
     st.markdown(
         """
         <div style='text-align:center;padding:3rem 0 1rem 0'>
-            <div style='font-size:3rem'>🎒</div>
-            <h1 style='margin:0.5rem 0 0.25rem 0'>Draper</h1>
-            <p style='color:#6b7280;margin:0 0 2rem 0'>Influencer Radar Platform</p>
+            <div style='font-size:3rem'>🔒</div>
+            <h1 style='margin:0.5rem 0 0.25rem 0'>Acesso Restrito</h1>
+            <p style='color:#6b7280;margin:0 0 2rem 0'>Este site é de uso interno.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -141,8 +143,6 @@ def _show_login_page() -> None:
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("#### Acesso restrito a @worldpackers.com")
-
         if st.button("🔐 Login com Google", use_container_width=True, type="primary"):
             try:
                 flow = _make_flow()
@@ -153,7 +153,6 @@ def _show_login_page() -> None:
                     prompt="select_account",
                 )
                 st.session_state.oauth_state = state
-                # JavaScript redirect — more reliable than st.markdown link
                 st.markdown(
                     f"<meta http-equiv='refresh' content='0; url={auth_url}'>",
                     unsafe_allow_html=True,
@@ -161,6 +160,3 @@ def _show_login_page() -> None:
                 st.info("Redirecionando para o Google...")
             except RuntimeError as e:
                 st.error(f"❌ {e}")
-
-        st.markdown("---")
-        st.caption("Contato: tech@worldpackers.com para solicitar acesso")
