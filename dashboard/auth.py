@@ -2,20 +2,23 @@
 Google OAuth authentication for Draper dashboard.
 Restricts access to @worldpackers.com domain only.
 
-Approach: uses st.query_params to capture the OAuth callback code,
-since Streamlit does not expose custom HTTP routes.
-The redirect URI points back to the same Streamlit URL — Google returns
-?code=...&state=... as query params, which we read on the next render cycle.
+Approach: manual OAuth2 flow via direct HTTP calls (no google_auth_oauthlib.Flow)
+to avoid PKCE issues. Uses st.query_params to capture the callback code.
 """
 from __future__ import annotations
 
 import os
+from urllib.parse import urlencode
 from typing import Optional
 
+import requests
 import streamlit as st
-from google.auth.transport.requests import Request
-from google.oauth2.id_token import verify_oauth2_token
-from google_auth_oauthlib.flow import Flow
+
+
+_GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+_GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+_SCOPES = "openid email profile"
 
 
 def _client_id() -> str:
@@ -33,11 +36,6 @@ def _client_secret() -> str:
 
 
 def _redirect_uri() -> str:
-    """
-    The redirect URI must match exactly what's registered in Google Cloud Console.
-    Streamlit serves the app at root (/), so we redirect back to root with query params.
-    Set OAUTH_REDIRECT_URI explicitly in Render environment variables to avoid mismatches.
-    """
     explicit = os.getenv("OAUTH_REDIRECT_URI", "")
     if explicit:
         return explicit
@@ -48,20 +46,41 @@ def _is_worldpackers_email(email: str) -> bool:
     return email.lower().endswith("@worldpackers.com")
 
 
-def _make_flow(state: Optional[str] = None) -> Flow:
-    config = {
-        "web": {
+def _build_auth_url() -> str:
+    params = {
+        "client_id": _client_id(),
+        "redirect_uri": _redirect_uri(),
+        "response_type": "code",
+        "scope": _SCOPES,
+        "access_type": "offline",
+        "prompt": "select_account",
+    }
+    return f"{_GOOGLE_AUTH_URL}?{urlencode(params)}"
+
+
+def _exchange_code_for_userinfo(code: str) -> dict:
+    """Exchange authorization code for tokens, then fetch user info."""
+    token_resp = requests.post(
+        _GOOGLE_TOKEN_URL,
+        data={
+            "code": code,
             "client_id": _client_id(),
             "client_secret": _client_secret(),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [_redirect_uri()],
-        }
-    }
-    kwargs: dict = {"scopes": ["openid", "email", "profile"]}
-    if state:
-        kwargs["state"] = state
-    return Flow.from_client_config(config, **kwargs)
+            "redirect_uri": _redirect_uri(),
+            "grant_type": "authorization_code",
+        },
+        timeout=10,
+    )
+    token_resp.raise_for_status()
+    access_token = token_resp.json().get("access_token")
+
+    userinfo_resp = requests.get(
+        _GOOGLE_USERINFO_URL,
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=10,
+    )
+    userinfo_resp.raise_for_status()
+    return userinfo_resp.json()
 
 
 def get_authenticated_user() -> Optional[dict]:
@@ -72,7 +91,7 @@ def require_auth() -> dict:
     """
     Call this at the top of main(). Handles three cases:
       1. Already authenticated → return user_info
-      2. OAuth callback arrived (query params have ?code=) → exchange for token
+      2. OAuth callback arrived (?code=) → exchange for token and verify email
       3. Not authenticated → show login page and st.stop()
     """
     # Case 1: already logged in
@@ -85,24 +104,12 @@ def require_auth() -> dict:
     # Case 2: Google redirected back with ?code=...
     if "code" in params:
         code = params["code"]
-        state = params.get("state", "")
-
-        # Clear query params immediately to avoid re-processing on rerun
         st.query_params.clear()
 
         try:
-            # Note: we skip state validation because Streamlit session_state
-            # does not persist across the Google OAuth redirect on Render.
-            flow = _make_flow()
-            flow.redirect_uri = _redirect_uri()
-            # Build full callback URL that google_auth_oauthlib expects
-            callback_url = f"{_redirect_uri()}?code={code}&state={state}"
-            flow.fetch_token(authorization_response=callback_url)
-
-            id_token_str = flow.credentials.id_token
-            user_info = verify_oauth2_token(id_token_str, Request(), _client_id())
-
+            user_info = _exchange_code_for_userinfo(code)
             email = user_info.get("email", "")
+
             if not _is_worldpackers_email(email):
                 st.error(f"❌ Acesso negado: {email} não é @worldpackers.com")
                 st.stop()
@@ -122,7 +129,6 @@ def require_auth() -> dict:
     _show_login_page()
     st.stop()
 
-    # unreachable, but satisfies type checker
     return {}
 
 
@@ -142,18 +148,9 @@ def _show_login_page() -> None:
     with col2:
         if st.button("🔐 Login com Google", use_container_width=True, type="primary"):
             try:
-                flow = _make_flow()
-                flow.redirect_uri = _redirect_uri()
-                auth_url, state = flow.authorization_url(
-                    access_type="offline",
-                    include_granted_scopes="true",
-                    prompt="select_account",
-                )
-                st.session_state.oauth_state = state
-                # Debug: show redirect_uri being used (remove after fix)
-                st.caption(f"redirect_uri: `{flow.redirect_uri}`")
+                auth_url = _build_auth_url()
                 st.markdown(
-                    f"<meta http-equiv='refresh' content='2; url={auth_url}'>",
+                    f"<meta http-equiv='refresh' content='0; url={auth_url}'>",
                     unsafe_allow_html=True,
                 )
                 st.info("Redirecionando para o Google...")
