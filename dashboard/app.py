@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
+from dashboard.auth import require_auth
 
 st.set_page_config(
     page_title="Draper — Influencer Radar",
@@ -38,6 +39,9 @@ _NAV = [
 
 
 def main() -> None:
+    # Require authentication — handles login page, OAuth callback, and session
+    user = require_auth()
+
     conn = _get_connection()
 
     # Hide Streamlit's auto-generated multipage nav (keep only our manual radio)
@@ -56,6 +60,15 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    # ── User info and logout ───────────────────────────────────────────────────
+    col_user, col_logout = st.sidebar.columns([3, 1])
+    with col_user:
+        st.caption(f"👤 {user.get('name', user.get('email', 'User'))}")
+    with col_logout:
+        if st.button("🚪", help="Logout", key="logout_btn"):
+            st.session_state.clear()
+            st.rerun()
 
     st.sidebar.markdown(
         "<p style='font-size:0.65rem;color:#6b7280;text-transform:uppercase;"
