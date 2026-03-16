@@ -34,7 +34,7 @@ def classify_niche(captions: list[str], hashtags: list[str]) -> str:
         response = client.chat.completions.create(
             model=GPT_NICHE_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
+            max_completion_tokens=20,
             temperature=0.0,
         )
         niche = response.choices[0].message.content.strip()

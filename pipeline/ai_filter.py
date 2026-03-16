@@ -66,7 +66,7 @@ def evaluate_creator(
                 {"role": "system", "content": _build_system_prompt(criteria)},
                 {"role": "user", "content": user_message},
             ],
-            max_tokens=80,
+            max_completion_tokens=80,
             temperature=0.0,
             response_format={"type": "json_object"},
         )

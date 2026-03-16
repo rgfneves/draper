@@ -681,7 +681,14 @@ def render(conn) -> None:
                 help="Controle de custo: quantos creators enviar ao AI filter por execução.",
             )
         with c_ai_stat:
-            st.metric("Avaliados", ai_done)
+            ai_done_filtered = (
+                conn.execute(
+                    f"SELECT COUNT(*) FROM creators WHERE id IN ({','.join(['%s'] * len(filtered_ids))}) AND ai_filter_pass IS NOT NULL",
+                    tuple(filtered_ids),
+                ).fetchone()[0]
+                if filtered_ids else 0
+            )
+            st.metric("Avaliados", ai_done_filtered)
 
         st.caption(f"Custo estimado: **~${max_ai * _COST_AI:.2f}**")
 
@@ -708,6 +715,8 @@ def render(conn) -> None:
                     "--skip-scrape",
                     "--max-ai-filter", str(max_ai),
                 ]
+                if filtered_ids:
+                    ai_args += ["--creator-ids", ",".join(str(i) for i in filtered_ids)]
                 from pipeline.ai_filter import _DEFAULT_CRITERIA as _DEF_CRIT
                 if ai_criteria_input.strip() != _DEF_CRIT.strip():
                     ai_args += ["--ai-criteria", ai_criteria_input.strip()]
@@ -730,22 +739,26 @@ def render(conn) -> None:
     # ══════════════════════════════════════════════════════════════════════════
     st.divider()
 
-    result_rows = conn.execute(
-        """
-        SELECT c.id, c.username, c.display_name, c.followers, c.niche,
-               c.email, c.link_in_bio,
-               c.ai_filter_pass, c.ai_filter_reason,
-               c.epic_trip_score, c.avg_engagement, c.posts_last_30_days,
-               c.is_lead,
-               MAX(o.contacted_at) AS contacted_at
-        FROM creators c
-        LEFT JOIN outreach o ON o.creator_id = c.id
-        WHERE c.platform = %s AND c.ai_filter_pass IS NOT NULL AND c.status != 'deleted'
-        GROUP BY c.id
-        ORDER BY c.epic_trip_score DESC
-        """,
-        (platform,),
-    ).fetchall()
+    if filtered_ids:
+        _res_placeholders = ",".join(["%s"] * len(filtered_ids))
+        result_rows = conn.execute(
+            f"""
+            SELECT c.id, c.username, c.display_name, c.followers, c.niche,
+                   c.email, c.link_in_bio,
+                   c.ai_filter_pass, c.ai_filter_reason,
+                   c.epic_trip_score, c.avg_engagement, c.posts_last_30_days,
+                   c.is_lead,
+                   MAX(o.contacted_at) AS contacted_at
+            FROM creators c
+            LEFT JOIN outreach o ON o.creator_id = c.id
+            WHERE c.id IN ({_res_placeholders}) AND c.ai_filter_pass IS NOT NULL AND c.status != 'deleted'
+            GROUP BY c.id
+            ORDER BY c.epic_trip_score DESC
+            """,
+            tuple(filtered_ids),
+        ).fetchall()
+    else:
+        result_rows = []
 
     if result_rows:
         df = pd.DataFrame([dict(r) for r in result_rows])

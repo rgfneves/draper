@@ -133,6 +133,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip creators that already have posts in DB — only scrape new ones",
     )
+    parser.add_argument(
+        "--creator-ids",
+        type=str,
+        default=None,
+        help="Comma-separated creator IDs to restrict AI filter (default: all eligible creators)",
+    )
     return parser
 
 
@@ -170,6 +176,11 @@ def main(argv: list[str] | None = None) -> None:
         if filter_excluded_cats_raw else None
     )
     ai_criteria: str | None = args.ai_criteria
+    creator_ids_raw = args.creator_ids
+    allowed_creator_ids: set[int] | None = (
+        {int(x.strip()) for x in creator_ids_raw.split(",") if x.strip()}
+        if creator_ids_raw else None
+    )
 
     if dry_run:
         # profiles: ~$0.0026/each; posts: ~$0.0023/post × max_posts; AI: ~$0.001/creator
@@ -423,7 +434,11 @@ def main(argv: list[str] | None = None) -> None:
             for c in db_creators:
                 if c.status == "excluded" or c.ai_filter_pass is not None:
                     continue
-                
+
+                # Restrict to explicit creator IDs if provided (from dashboard filter)
+                if allowed_creator_ids is not None and c.id not in allowed_creator_ids:
+                    continue
+
                 # Only evaluate creators that have posts (i.e., passed initial filter)
                 post_count = conn.execute(
                     "SELECT COUNT(*) FROM posts WHERE creator_id=%s", (c.id,)
