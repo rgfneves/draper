@@ -39,11 +39,11 @@ def evaluate_creator(
     niche: str,
     *,
     criteria: str | None = None,
-) -> tuple[bool, str]:
+) -> tuple[bool | None, str]:
     """
     Calls GPT-4o-mini with an authenticity evaluation prompt.
-    Returns (ai_pass: bool, ai_reason: str).
-    Handles API errors gracefully (returns True, 'evaluation_failed' on error).
+    Returns (ai_pass: bool, ai_reason: str) on success.
+    Returns (None, 'evaluation_failed') on API/network errors — caller should skip persisting.
     """
     from config.settings import GPT_FILTER_MODEL, OPENAI_API_KEY
 
@@ -82,10 +82,10 @@ def evaluate_creator(
 
     except json.JSONDecodeError as exc:
         logger.warning("AI filter returned non-JSON: %s", exc)
-        return False, "invalid_json"
+        return None, "invalid_json"
     except Exception as exc:
         logger.warning("AI filter evaluation failed: %s", exc)
-        return False, "evaluation_failed"
+        return None, "evaluation_failed"
 
 
 def evaluate_batch(
@@ -108,7 +108,7 @@ def evaluate_batch(
             niche=creator.get("niche") or "",
             criteria=criteria,
         )
-        updated = {**creator, "ai_filter_pass": ai_pass, "ai_filter_reason": ai_reason}
+        updated = {**creator, "ai_filter_pass": ai_pass, "ai_filter_reason": ai_reason, "_eval_failed": ai_pass is None}
         results.append(updated)
         if i < len(creators) - 1 and delay > 0:
             time.sleep(delay)

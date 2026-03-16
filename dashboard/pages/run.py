@@ -342,21 +342,21 @@ def render(conn) -> None:
         plat_placeholders = ",".join(["%s"] * len(filt_platforms))
         if last_ts_f and scope == "Apenas desta coleta (Passo 2)":
             all_profiles = conn.execute(
-                f"SELECT followers, following, is_private, bio, business_account, "
-                f"total_posts, email, category FROM creators "
+                f"SELECT id, username, display_name, followers, following, is_private, bio, "
+                f"business_account, total_posts, email, category FROM creators "
                 f"WHERE platform IN ({plat_placeholders}) AND status != 'excluded' AND first_seen_at >= %s",
                 (*filt_platforms, last_ts_f),
             ).fetchall()
         else:
             all_profiles = conn.execute(
-                f"SELECT followers, following, is_private, bio, business_account, "
-                f"total_posts, email, category FROM creators "
+                f"SELECT id, username, display_name, followers, following, is_private, bio, "
+                f"business_account, total_posts, email, category FROM creators "
                 f"WHERE platform IN ({plat_placeholders}) AND status NOT IN ('excluded', 'contacted', 'deleted')",
                 tuple(filt_platforms),
             ).fetchall()
 
         if all_profiles:
-            preview_pass = 0
+            passed_rows = []
             for row in all_profiles:
                 if row["is_private"]:
                     continue
@@ -379,7 +379,8 @@ def render(conn) -> None:
                     cat_lower = (row["category"] or "").lower()
                     if any(ec.lower() in cat_lower for ec in filt_excl_cats):
                         continue
-                preview_pass += 1
+                passed_rows.append(dict(row))
+            preview_pass = len(passed_rows)
 
             c_prev, c_info = st.columns([1, 3])
             with c_prev:
@@ -392,6 +393,26 @@ def render(conn) -> None:
                     f"</div>",
                     unsafe_allow_html=True,
                 )
+
+            if passed_rows:
+                with st.expander(f"👥 Creators que passariam ({preview_pass})", expanded=False):
+                    df_preview = pd.DataFrame(passed_rows)
+                    df_preview["Followers"] = df_preview["followers"].apply(lambda x: f"{x:,}" if x else "—")
+                    df_preview["bio_short"] = df_preview["bio"].apply(lambda x: (x or "")[:60] + "…" if x and len(x) > 60 else (x or "—"))
+                    df_preview["Perfil"] = df_preview["username"].apply(lambda u: _profile_url(u, platform))
+                    st.dataframe(
+                        df_preview[["Perfil", "display_name", "Followers", "category", "bio_short", "email"]].rename(columns={
+                            "display_name": "Nome",
+                            "category": "Categoria",
+                            "bio_short": "Bio",
+                            "email": "Email",
+                        }),
+                        column_config={
+                            "Perfil": st.column_config.LinkColumn("Perfil", display_text=r"https://(?:www\.)?(?:instagram\.com|tiktok\.com)/@?(\w+)/?$"),
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                    )
         else:
             filt_min_f = def_min
             filt_keywords = []
@@ -400,6 +421,7 @@ def render(conn) -> None:
             filt_require_email = False
             filt_excl_cats = []
             preview_pass = 0
+            passed_rows = []
             st.caption("Nenhum creator no banco ainda — colete perfis primeiro (Step 2).")
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -408,15 +430,18 @@ def render(conn) -> None:
     with st.container(border=True):
         _step_label("4", "Scrapar posts", "Busca posts/vídeos dos creators — etapa mais cara")
 
-        # Creators que já têm posts vs os que ainda não têm
-        without_posts = conn.execute(
-            """
-            SELECT COUNT(*) FROM creators c
-            WHERE c.platform=%s AND c.status NOT IN ('excluded','deleted')
-              AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.creator_id = c.id)
-            """,
-            (platform,),
-        ).fetchone()[0]
+        # Creators que passaram no filtro E ainda não têm posts
+        filtered_ids = [r["id"] for r in passed_rows] if passed_rows else []
+        if filtered_ids:
+            id_placeholders = ",".join(["%s"] * len(filtered_ids))
+            without_posts = conn.execute(
+                f"SELECT COUNT(*) FROM creators c "
+                f"WHERE c.id IN ({id_placeholders}) "
+                f"AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.creator_id = c.id)",
+                tuple(filtered_ids),
+            ).fetchone()[0]
+        else:
+            without_posts = 0
 
         c_s1, c_s2, c_stat2a, c_stat2b = st.columns([2, 2, 1, 1])
         with c_s1:
@@ -432,7 +457,7 @@ def render(conn) -> None:
                 help="Quantos posts/vídeos buscar por creator.",
             )
         with c_stat2a:
-            st.metric("Sem posts", without_posts, help="Nunca tiveram posts coletados")
+            st.metric("Filtrados sem posts", without_posts, help="Passaram no filtro e ainda não têm posts")
         with c_stat2b:
             st.metric("Com posts", w_posts, help="Já têm posts no banco")
 
@@ -441,9 +466,9 @@ def render(conn) -> None:
             capped = without_posts > max_scrape
             color  = "#f59e0b" if capped else "#22c55e"
             label  = (
-                f"<b>{without_posts}</b> sem posts → cap em <b>{max_scrape}</b> → scrapa <b>{will_scrape}</b>"
+                f"<b>{without_posts}</b> filtrados sem posts → cap em <b>{max_scrape}</b> → scrapa <b>{will_scrape}</b>"
                 if capped else
-                f"<b>{without_posts}</b> sem posts → scrapa todos os <b>{will_scrape}</b>"
+                f"<b>{without_posts}</b> filtrados sem posts → scrapa todos os <b>{will_scrape}</b>"
             )
             st.markdown(
                 f"<div style='font-size:0.8rem;color:{color};margin-bottom:4px'>{label}</div>",
@@ -451,7 +476,7 @@ def render(conn) -> None:
             )
         else:
             st.markdown(
-                "<div style='font-size:0.8rem;color:#22c55e;margin-bottom:4px'>✅ Todos os creators já têm posts coletados</div>",
+                "<div style='font-size:0.8rem;color:#22c55e;margin-bottom:4px'>✅ Todos os creators filtrados já têm posts coletados</div>",
                 unsafe_allow_html=True,
             )
 
@@ -493,17 +518,17 @@ def render(conn) -> None:
         c_btn_new, c_btn_all = st.columns(2)
         with c_btn_new:
             scrape_new_btn = st.button(
-                f"📥 Scrapar novos ({without_posts} sem posts)",
+                f"📥 Scrapar filtrados novos ({without_posts})",
                 key="scrape_new_btn",
                 type="primary", use_container_width=True,
                 disabled=not pwd4 or without_posts == 0,
             )
         with c_btn_all:
             scrape_all_btn = st.button(
-                f"🔄 Atualizar posts de todos ({active} ativos)",
+                f"🔄 Atualizar posts dos filtrados ({preview_pass} filtrados)",
                 key="scrape_all_btn",
                 type="secondary", use_container_width=True,
-                disabled=not pwd4,
+                disabled=not pwd4 or preview_pass == 0,
             )
 
         for btn, skip in [(scrape_new_btn, True), (scrape_all_btn, False)]:
@@ -534,6 +559,7 @@ def render(conn) -> None:
         """
         SELECT c.id, c.username, c.display_name, c.followers, c.niche,
                c.email, c.link_in_bio, c.avg_engagement, c.posts_last_30_days,
+               c.bio, c.category, c.status,
                COUNT(p.id) AS post_count,
                MAX(o.contacted_at) AS contacted_at
         FROM creators c
@@ -554,6 +580,7 @@ def render(conn) -> None:
         df_scraped["Followers"] = df_scraped["followers"].apply(lambda x: f"{x:,}" if x is not None else "—")
         df_scraped["Contatado"] = df_scraped["contacted_at"].notna()
         df_scraped["Marcar"]    = False
+        df_scraped["bio_short"] = df_scraped["bio"].apply(lambda x: (x or "")[:60] + "…" if x and len(x) > 60 else (x or "—"))
 
         c_title4, c_dl4 = st.columns([4, 1])
         with c_title4:
@@ -562,12 +589,12 @@ def render(conn) -> None:
                 unsafe_allow_html=True,
             )
         with c_dl4:
-            csv_scraped = df_scraped[["username", "display_name", "followers", "niche",
-                                      "email", "link_in_bio", "avg_engagement",
-                                      "posts_last_30_days", "post_count"]].copy()
-            csv_scraped.columns = ["username", "display_name", "followers", "niche",
-                                   "email", "link_in_bio", "avg_engagement",
-                                   "posts_last_30d", "post_count"]
+            csv_scraped = df_scraped[["username", "display_name", "followers", "category", "niche",
+                                      "email", "link_in_bio", "bio", "avg_engagement",
+                                      "posts_last_30_days", "post_count", "status"]].copy()
+            csv_scraped.columns = ["username", "display_name", "followers", "category", "niche",
+                                   "email", "link_in_bio", "bio", "avg_engagement",
+                                   "posts_last_30d", "post_count", "status"]
             st.download_button(
                 "⬇️ Exportar CSV",
                 csv_scraped.to_csv(index=False),
@@ -578,11 +605,14 @@ def render(conn) -> None:
 
         df_scraped["Perfil"] = df_scraped["username"].apply(lambda u: _profile_url(u, platform))
 
-        display_scraped = df_scraped[["Marcar", "Perfil", "Followers", "niche",
-                                      "Eng.", "Posts/30d", "post_count", "email", "Contatado"]].rename(columns={
-            "niche":      "Nicho",
-            "post_count": "Posts scrapados",
-            "email":      "Email",
+        display_scraped = df_scraped[["Marcar", "Perfil", "display_name", "Followers", "category", "niche",
+                                      "bio_short", "Eng.", "Posts/30d", "post_count", "email", "Contatado"]].rename(columns={
+            "display_name": "Nome",
+            "category":     "Categoria",
+            "niche":        "Nicho",
+            "bio_short":    "Bio",
+            "post_count":   "Posts scrapados",
+            "email":        "Email",
         })
 
         edited_scraped = st.data_editor(
@@ -596,7 +626,7 @@ def render(conn) -> None:
                 "Posts/30d":       st.column_config.TextColumn("Posts/30d",       width="small"),
                 "Posts scrapados": st.column_config.TextColumn("Posts scrapados", width="small"),
             },
-            disabled=["Perfil", "Followers", "Nicho", "Eng.", "Posts/30d", "Posts scrapados", "Email", "Contatado"],
+            disabled=["Perfil", "Nome", "Followers", "Categoria", "Nicho", "Bio", "Eng.", "Posts/30d", "Posts scrapados", "Email", "Contatado"],
             use_container_width=True,
             hide_index=True,
             key="scraped_editor",
@@ -864,8 +894,8 @@ def render(conn) -> None:
         ).fetchall()
         if runs:
             df_runs = pd.DataFrame([dict(r) for r in runs])
-            df_runs["started_at"]  = df_runs["started_at"].str[:16]
-            df_runs["finished_at"] = df_runs["finished_at"].str[:16].fillna("—")
+            df_runs["started_at"]  = pd.to_datetime(df_runs["started_at"]).dt.strftime("%Y-%m-%d %H:%M")
+            df_runs["finished_at"] = pd.to_datetime(df_runs["finished_at"]).dt.strftime("%Y-%m-%d %H:%M").fillna("—")
             df_runs.rename(columns={
                 "platform": "Plataforma", "status": "Status",
                 "creators_found": "Descobertos", "creators_qualified": "Qualificados",

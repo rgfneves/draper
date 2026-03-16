@@ -458,14 +458,19 @@ def main(argv: list[str] | None = None) -> None:
 
             if to_filter:
                 evaluated = evaluate_batch(to_filter, criteria=ai_criteria)
+                saved = 0
                 for item in evaluated:
+                    if item.get("_eval_failed"):
+                        logger.warning("Skipping ai_filter persist for creator %s — evaluation_failed", item["id"])
+                        continue
                     update_creator_ai_filter(
                         conn,
                         item["id"],
                         item["ai_filter_pass"],
                         item["ai_filter_reason"],
                     )
-                openai_cost += len(evaluated) * 0.0001  # rough estimate
+                    saved += 1
+                openai_cost += saved * 0.0001  # rough estimate
 
         # ---------------------------------------------------------------
         # Step 5: Scoring

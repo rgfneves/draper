@@ -56,7 +56,7 @@ def test_evaluate_handles_empty_bio(mock_openai_cls):
 
 
 @patch("pipeline.ai_filter.OpenAI")
-def test_evaluate_handles_api_error_returns_default(mock_openai_cls):
+def test_evaluate_handles_api_error_returns_none(mock_openai_cls):
     mock_client = MagicMock()
     mock_openai_cls.return_value = mock_client
     mock_client.chat.completions.create.side_effect = Exception("Connection error")
@@ -68,7 +68,7 @@ def test_evaluate_handles_api_error_returns_default(mock_openai_cls):
         hashtags=["travel"],
         niche="travel",
     )
-    assert ai_pass is True
+    assert ai_pass is None
     assert ai_reason == "evaluation_failed"
 
 
