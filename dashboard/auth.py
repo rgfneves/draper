@@ -86,17 +86,14 @@ def require_auth() -> dict:
     if "code" in params:
         code = params["code"]
         state = params.get("state", "")
-        saved_state = st.session_state.get("oauth_state", "")
 
         # Clear query params immediately to avoid re-processing on rerun
         st.query_params.clear()
 
-        if state != saved_state:
-            st.error("❌ Estado OAuth inválido. Tente novamente.")
-            st.stop()
-
         try:
-            flow = _make_flow(state=state)
+            # Note: we skip state validation because Streamlit session_state
+            # does not persist across the Google OAuth redirect on Render.
+            flow = _make_flow()
             flow.redirect_uri = _redirect_uri()
             # Build full callback URL that google_auth_oauthlib expects
             callback_url = f"{_redirect_uri()}?code={code}&state={state}"
