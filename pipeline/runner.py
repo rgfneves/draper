@@ -436,15 +436,21 @@ def main(argv: list[str] | None = None) -> None:
         if not skip_ai_filter and not dry_run:
             from pipeline.ai_filter import evaluate_batch
             db_creators = get_all_creators(conn, platform=platform)
+            logger.info("AI Filter: %d creators in DB for platform=%s, allowed_ids=%s, force_reeval=%s",
+                        len(db_creators), platform, allowed_creator_ids, force_reeval)
             to_filter = []
+            skipped_excluded = skipped_already = skipped_not_allowed = skipped_no_posts = 0
             for c in db_creators:
                 if c.status == "excluded":
+                    skipped_excluded += 1
                     continue
                 if c.ai_filter_pass is not None and not force_reeval:
+                    skipped_already += 1
                     continue
 
                 # Restrict to explicit creator IDs if provided (from dashboard filter)
                 if allowed_creator_ids is not None and c.id not in allowed_creator_ids:
+                    skipped_not_allowed += 1
                     continue
 
                 # Only evaluate creators that have posts (i.e., passed initial filter)
@@ -452,7 +458,8 @@ def main(argv: list[str] | None = None) -> None:
                     "SELECT COUNT(*) FROM posts WHERE creator_id=%s", (c.id,)
                 ).fetchone()[0]
                 if post_count == 0:
-                    logger.debug("Skipping AI filter for creator %s — no posts (didn't pass initial filter)", c.id)
+                    skipped_no_posts += 1
+                    logger.info("Skipping AI filter for creator %s (%s) — no posts", c.id, c.username)
                     continue
                 
                 captions_ai = [
@@ -479,6 +486,12 @@ def main(argv: list[str] | None = None) -> None:
                         "hashtags": hashtags_ai,
                     }
                 )
+
+            logger.info(
+                "AI Filter selection: eligible=%d, skipped_excluded=%d, skipped_already_eval=%d, "
+                "skipped_not_in_allowed=%d, skipped_no_posts=%d",
+                len(to_filter), skipped_excluded, skipped_already, skipped_not_allowed, skipped_no_posts,
+            )
 
             # Apply AI filter cap — hard limit to control OpenAI cost
             if len(to_filter) > max_ai_filter:

@@ -742,6 +742,30 @@ def render(conn) -> None:
 
     if filtered_ids:
         _res_placeholders = ",".join(["%s"] * len(filtered_ids))
+
+        # Debug: show raw DB state for filtered creators
+        with st.expander("🔍 Debug: estado no banco dos filtered_ids", expanded=False):
+            debug_rows = conn.execute(
+                f"""
+                SELECT c.id, c.username, c.status, c.niche,
+                       c.ai_filter_pass, c.ai_filter_reason,
+                       c.epic_trip_score,
+                       (SELECT COUNT(*) FROM posts p WHERE p.creator_id = c.id) AS post_count
+                FROM creators c
+                WHERE c.id IN ({_res_placeholders})
+                ORDER BY c.id
+                """,
+                tuple(filtered_ids),
+            ).fetchall()
+            if debug_rows:
+                st.dataframe(
+                    pd.DataFrame([dict(r) for r in debug_rows]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.warning("Nenhum creator encontrado com os filtered_ids.")
+
         result_rows = conn.execute(
             f"""
             SELECT c.id, c.username, c.display_name, c.followers, c.niche,
