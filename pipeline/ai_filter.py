@@ -69,7 +69,13 @@ def evaluate_creator(
             max_completion_tokens=80,
         )
         content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
+        # Strip markdown code fences if present (e.g. ```json ... ```)
+        import re as _re
+        json_match = _re.search(r"\{.*?\}", content, _re.DOTALL)
+        if not json_match:
+            logger.warning("AI filter: no JSON object found in response: %s", content)
+            return None, "invalid_json"
+        data = json.loads(json_match.group())
         if "pass" not in data:
             logger.warning("AI filter response missing 'pass' key: %s", content)
             return False, "invalid_response"
