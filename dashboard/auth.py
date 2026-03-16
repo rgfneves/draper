@@ -153,8 +153,10 @@ def _show_login_page() -> None:
                     prompt="select_account",
                 )
                 st.session_state.oauth_state = state
+                # Debug: show redirect_uri being used (remove after fix)
+                st.caption(f"redirect_uri: `{flow.redirect_uri}`")
                 st.markdown(
-                    f"<meta http-equiv='refresh' content='0; url={auth_url}'>",
+                    f"<meta http-equiv='refresh' content='2; url={auth_url}'>",
                     unsafe_allow_html=True,
                 )
                 st.info("Redirecionando para o Google...")
