@@ -21,7 +21,7 @@ def render(conn) -> None:
     total = len(creators_rows)
     qualified = int((df["ai_filter_pass"] == 1).sum()) if not df.empty and "ai_filter_pass" in df.columns else 0
     avg_score = df["epic_trip_score"].dropna().mean() if not df.empty and "epic_trip_score" in df.columns else 0.0
-    last_run = runs_rows[0]["started_at"][:10] if runs_rows else None
+    last_run = str(runs_rows[0]["started_at"])[:10] if runs_rows else None
     last_status = runs_rows[0]["status"] if runs_rows else None
 
     # ── Process status bar ─────────────────────────────────────────────────────

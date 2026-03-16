@@ -423,6 +423,15 @@ def main(argv: list[str] | None = None) -> None:
             for c in db_creators:
                 if c.status == "excluded" or c.ai_filter_pass is not None:
                     continue
+                
+                # Only evaluate creators that have posts (i.e., passed initial filter)
+                post_count = conn.execute(
+                    "SELECT COUNT(*) FROM posts WHERE creator_id=%s", (c.id,)
+                ).fetchone()[0]
+                if post_count == 0:
+                    logger.debug("Skipping AI filter for creator %s — no posts (didn't pass initial filter)", c.id)
+                    continue
+                
                 captions_ai = [
                     dict(r)["caption"] or ""
                     for r in conn.execute(
