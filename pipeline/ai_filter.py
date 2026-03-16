@@ -18,11 +18,12 @@ _DEFAULT_CRITERIA = """Authentic budget travel creators (mochileros/backpackers)
 
 _JSON_INSTRUCTION = """
 
-Reply with a JSON object with exactly two keys:
-- "pass": boolean (true if the creator conforms to the criteria, false otherwise)
+You MUST reply with ONLY a raw JSON object — no markdown, no explanation, no code fences.
+Use exactly these two keys:
+- "pass": boolean (true if the creator matches the criteria, false otherwise)
 - "reason": string (one sentence explaining your decision)
 
-Example:
+Your entire response must be exactly like this example:
 {"pass": true, "reason": "Authentic mochilero sharing budget tips across Latin America."}
 """
 
@@ -69,23 +70,31 @@ def evaluate_creator(
             max_completion_tokens=80,
         )
         content = response.choices[0].message.content or "{}"
+        logger.info("AI filter raw response [model=%s]: %r", GPT_FILTER_MODEL, content)
         # Strip markdown code fences if present (e.g. ```json ... ```)
         import re as _re
         json_match = _re.search(r"\{.*?\}", content, _re.DOTALL)
         if not json_match:
-            logger.warning("AI filter: no JSON object found in response: %s", content)
+            logger.warning("AI filter: no JSON object found in response. raw=%r", content)
             return None, "invalid_json"
-        data = json.loads(json_match.group())
-        if "pass" not in data:
-            logger.warning("AI filter response missing 'pass' key: %s", content)
+        raw_json = json_match.group()
+        logger.debug("AI filter extracted JSON: %s", raw_json)
+        data = json.loads(raw_json)
+        # Accept common key variations in case model renames the key
+        for key in ("pass", "passed", "result", "approved", "matches"):
+            if key in data:
+                pass_value = data[key]
+                break
+        else:
+            logger.warning("AI filter response missing 'pass' key. parsed=%s raw=%r", data, content)
             return False, "invalid_response"
-        ai_pass = bool(data["pass"])
-        ai_reason = str(data.get("reason", ""))
-        logger.debug("AI filter result: pass=%s reason=%s", ai_pass, ai_reason)
+        ai_pass = bool(pass_value)
+        ai_reason = str(data.get("reason", data.get("explanation", "")))
+        logger.info("AI filter result: pass=%s reason=%s", ai_pass, ai_reason)
         return ai_pass, ai_reason
 
     except json.JSONDecodeError as exc:
-        logger.warning("AI filter returned non-JSON: %s", exc)
+        logger.warning("AI filter JSON parse failed: %s — raw content: %r", exc, locals().get('content', ''))
         return None, "invalid_json"
     except Exception as exc:
         logger.warning("AI filter evaluation failed: %s", exc)
