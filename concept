@@ -1,0 +1,211 @@
+# Epic Trip – Influencer Radar (Scraping Project) - FASE 1
+
+## Objetivo
+
+Criar um sistema automatizado que identifica criadores de conteúdo com potencial para promover e vender a Epic Trip.
+
+O sistema fará descoberta, coleta de dados, análise e ranking de influenciadores focados em travel.
+
+---
+
+# Escopo do Sistema
+
+1. Descobrir criadores relevantes
+2. Coletar dados estruturados dos perfis
+3. Calcular métricas de performance
+4. Classificar criadores por potencial
+5. Gerar lista priorizada para outreach
+
+---
+
+# Parâmetros coletados de um criador
+
+Objetivo: coletar o **máximo de atributos possíveis** por criador.
+
+* lista abaixo é **exemplo inicial**, não limitante
+* priorizar **alta cobertura de dados**
+* avaliar **custo de scraping / API** por campo
+* manter campos extras quando disponíveis para experimentação
+
+## Perfil
+
+* username
+* nome exibido
+* bio
+* link na bio
+* seguidores
+* seguindo
+* total de posts
+* conta verificada
+* foto de perfil
+* categoria da conta
+* localização (quando disponível)
+
+## Atividade
+
+* data do último post
+* frequência média de posts
+* posts por semana
+
+## Métricas médias
+
+* média de likes
+* média de comentários
+* média de views
+* engagement rate
+
+## Conteúdo
+
+* hashtags mais usadas
+* menções frequentes
+* idioma das legendas
+* nicho provável
+
+## Crescimento
+
+* crescimento de seguidores
+* tendência de views
+* taxa de viralização
+
+## Audiência (inferido)
+
+* país provável da audiência
+* idioma dominante da audiência
+* qualidade da audiência (bots vs real)
+
+---
+
+# Métricas de Seleção
+
+Score composto usado para priorizar criadores.
+
+EpicTripScore =
+
+* engagement
+* nicho travel
+* faixa de seguidores
+* crescimento
+* storytelling
+
+---
+
+# Descoberta de Criadores
+
+Fontes de descoberta:
+
+* hashtags de viagem
+* perfis similares
+* posts virais de travel
+* comentários recorrentes
+
+---
+
+# Pipeline
+
+1. Descoberta de perfis
+2. Scraping dos perfis
+3. Scraping dos posts recentes
+4. Cálculo de métricas
+5. Classificação
+6. Lista priorizada
+
+---
+
+# Output do Sistema
+
+Objetivo principal:
+
+Gerar uma lista filtrada de criadores baseada em métricas objetivas.
+
+Essa lista pode ser:
+
+* exportada em CSV
+* usada por um segundo agente
+* usada para outreach
+
+---
+
+# Armazenamento de Dados
+
+* Todos os perfis e posts salvos em banco local
+* Histórico preservado para reprocessamento
+* Dataset exportável para análise
+
+---
+
+# Painel de Calibração
+
+Painel focado apenas em filtros e métricas objetivas.
+
+Filtros principais:
+
+* geografia
+* sexo (quando inferido)
+* idade estimada
+* seguidores
+* engagement
+* média de views
+
+Funções:
+
+* ajustar filtros
+* visualizar resultados
+* gerar lista final
+* exportar CSV
+
+Tipos de filtro:
+
+* filtros numéricos (followers, engagement, views)
+* filtros demográficos (geografia, sexo, idade estimada)
+* filtro de IA via prompt
+
+Filtro de IA:
+
+* prompt avalia perfil e conteúdo
+* retorna: passa / não passa
+* usado para critérios subjetivos (ex: "parece criador de travel autêntico")
+
+Objetivo:
+
+Encontrar e baixar listas de usuários que atendem critérios físicos definidos.
+
+---
+
+# Método de Experimento
+
+Base sempre dividida em 3 partes:
+
+1. Treino (ajustar modelo e pesos)
+2. Validação (adaptar parâmetros)
+3. Teste (avaliar resultado final)
+
+Regra:
+
+* nunca otimizar usando a base de teste
+* comparar scores entre versões
+
+---
+
+# Stack Técnica
+
+* Linguagem: Python
+* Scraping: Apify API
+* Banco local: SQLite (início)
+* Banco futuro: PostgreSQL
+* Painel de calibração: Streamlit
+
+Arquitetura simples:
+
+Apify → Python pipeline → SQLite
+↓
+Streamlit
+
+---
+
+# Próximos Passos
+
+1. Definir hashtags seed
+2. Implementar scraping com Apify
+3. Construir banco local
+4. Criar painel de calibração
+5. Rodar primeiro experimento

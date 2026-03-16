@@ -1,0 +1,37 @@
+{
+  "id": "7380000000000000001",
+  "text": "Semana en Roma con menos de 200 euros 🍕🏛️ Todo incluido! #mochilero #roma #viajes #lowcost #italia",
+  "createTime": 1718100000,
+  "createTimeISO": "2024-06-11T10:00:00.000Z",
+  "authorMeta": {
+    "id": "9876543210",
+    "name": "viajera_sofia",
+    "nickName": "Sofía en el Mundo",
+    "verified": false,
+    "signature": "Mochilera española 🎒 Viajando por el mundo sin gastar una fortuna",
+    "fans": 18500,
+    "following": 320,
+    "heart": 420000,
+    "video": 98
+  },
+  "musicMeta": {
+    "musicName": "Cumbia del Viajero",
+    "musicAuthor": "TravelBeats"
+  },
+  "diggCount": 3200,
+  "shareCount": 410,
+  "playCount": 87000,
+  "commentCount": 215,
+  "hashtags": [
+    {"id": "1001", "name": "mochilero"},
+    {"id": "1002", "name": "roma"},
+    {"id": "1003", "name": "viajes"},
+    {"id": "1004", "name": "lowcost"},
+    {"id": "1005", "name": "italia"}
+  ],
+  "videoUrl": "https://example.com/video.mp4",
+  "webVideoUrl": "https://www.tiktok.com/@viajera_sofia/video/7380000000000000001",
+  "covers": {
+    "default": "https://example.com/cover.jpg"
+  }
+}

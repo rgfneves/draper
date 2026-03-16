@@ -1,0 +1,23 @@
+{
+  "id": "EzCdEfGhIjK",
+  "type": "Sidecar",
+  "ownerUsername": "mochilero_andres",
+  "ownerFullName": "Andrés Viajero",
+  "ownerFollowersCount": 4200,
+  "caption": "5 razones para viajar por Colombia con menos de $30/día 🇨🇴💚 Desliza para ver todos los tips → #colombia #mochilero #viajerolatino",
+  "hashtags": ["colombia", "mochilero", "viajerolatino", "tipsviaje", "lowcost"],
+  "likesCount": 430,
+  "commentsCount": 67,
+  "videoViewCount": 0,
+  "videoPlayCount": 0,
+  "timestamp": 1716000000,
+  "url": "https://www.instagram.com/p/EzCdEfGhIjK/",
+  "shortCode": "EzCdEfGhIjK",
+  "locationName": "Cartagena, Colombia",
+  "isSponsored": false,
+  "childPosts": [
+    {"url": "https://example.com/img1.jpg"},
+    {"url": "https://example.com/img2.jpg"},
+    {"url": "https://example.com/img3.jpg"}
+  ]
+}
