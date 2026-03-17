@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ def passes_initial_filter(
 
     bio = (creator.bio or "").lower()
     for kw in kw_list:
-        if kw.lower() in bio:
+        if re.search(r"\b" + re.escape(kw.lower()) + r"\b", bio):
             return False
 
     if exclude_business and creator.business_account:
