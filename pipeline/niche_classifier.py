@@ -41,7 +41,7 @@ def classify_niche(captions: list[str], hashtags: list[str]) -> str:
         return niche
     except Exception as exc:
         logger.warning("Niche classification failed: %s", exc)
-        return ""  # empty → score_niche returns 0.0, não aprova automaticamente
+        return None  # None → COALESCE preserves existing niche in DB
 
 
 def is_niche_irrelevant(niche: str, excluded_keywords: list[str]) -> bool:

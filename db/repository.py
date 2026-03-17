@@ -52,7 +52,7 @@ def upsert_creator(conn, creator: Creator) -> int:
             email               = COALESCE(EXCLUDED.email, creators.email),
             category            = COALESCE(EXCLUDED.category, creators.category),
             location            = COALESCE(EXCLUDED.location, creators.location),
-            niche               = COALESCE(EXCLUDED.niche, creators.niche),
+            niche               = COALESCE(NULLIF(EXCLUDED.niche, ''), creators.niche),
             ai_filter_pass      = COALESCE(EXCLUDED.ai_filter_pass, creators.ai_filter_pass),
             ai_filter_reason    = COALESCE(EXCLUDED.ai_filter_reason, creators.ai_filter_reason),
             epic_trip_score     = COALESCE(EXCLUDED.epic_trip_score, creators.epic_trip_score),

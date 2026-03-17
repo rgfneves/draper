@@ -159,3 +159,18 @@ def test_get_unscored_creators(pg_conn):
     unscored = get_unscored_creators(pg_conn)
     assert len(unscored) == 1
     assert unscored[0].username == "unscored_user"
+
+
+def test_upsert_creator_preserves_niche_on_empty_string(pg_conn):
+    """Empty-string niche must not overwrite an existing classified niche."""
+    c = _make_creator(username="nichetest", niche="budget travel")
+    cid = upsert_creator(pg_conn, c)
+
+    # Simulate a second upsert where niche comes back as "" (GPT failure)
+    c2 = _make_creator(username="nichetest", niche="")
+    upsert_creator(pg_conn, c2)
+
+    row = pg_conn.execute(
+        "SELECT niche FROM creators WHERE id=%s", (cid,)
+    ).fetchone()
+    assert row["niche"] == "budget travel", "niche must be preserved when update sends empty string"
