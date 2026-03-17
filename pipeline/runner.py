@@ -386,7 +386,7 @@ def main(argv: list[str] | None = None) -> None:
         creators_found = creators_found or len(db_creators)
 
         for creator in db_creators:
-            if creator.id is None:
+            if creator.id is None or creator.status == "excluded":
                 continue
 
             # Load posts for this creator

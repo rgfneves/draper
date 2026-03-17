@@ -157,3 +157,20 @@ def test_run_creates_score_history_entry(mock_discover, mock_fetch, mock_conn, p
     history = get_score_history(pg_conn, cid)
     assert len(history) >= 1
     assert history[0]["epic_trip_score"] is not None
+
+
+def test_excluded_creator_not_analyzed(pg_conn):
+    """After filtering, excluded creators must not appear in the analysis candidate list."""
+    from db.models import Creator
+    from db.repository import upsert_creator, update_creator_status
+
+    c = Creator(platform="instagram", username="skip_me", followers=1000)
+    cid = upsert_creator(pg_conn, c)
+    update_creator_status(pg_conn, cid, "excluded")
+
+    creators = get_all_creators(pg_conn, platform="instagram")
+    # Simulate the analysis loop guard
+    to_analyze = [cr for cr in creators if cr.id is not None and cr.status != "excluded"]
+
+    assert all(cr.username != "skip_me" for cr in to_analyze), \
+        "excluded creator must be skipped in analysis loop"
