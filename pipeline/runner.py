@@ -144,6 +144,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Re-evaluate creators even if ai_filter_pass is already set (overwrites previous results)",
     )
+    parser.add_argument(
+        "--post-scrape-usernames",
+        type=str,
+        default=None,
+        help="Comma-separated usernames to scrape posts for directly (bypasses discovery)",
+    )
     return parser
 
 
@@ -182,6 +188,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     ai_criteria: str | None = args.ai_criteria
     force_reeval: bool = args.force_reeval
+    post_scrape_usernames_raw = args.post_scrape_usernames
+    post_scrape_usernames: list[str] | None = (
+        [u.strip() for u in post_scrape_usernames_raw.split(",") if u.strip()]
+        if post_scrape_usernames_raw else None
+    )
     creator_ids_raw = args.creator_ids
     allowed_creator_ids: set[int] | None = (
         {int(x.strip()) for x in creator_ids_raw.split(",") if x.strip()}
@@ -230,6 +241,31 @@ def main(argv: list[str] | None = None) -> None:
     openai_cost = 0.0
 
     try:
+        # ---------------------------------------------------------------
+        # Step 0: Direct post scrape for specific usernames (bypasses discovery)
+        # ---------------------------------------------------------------
+        if post_scrape_usernames:
+            from pipeline.scraping import scrape_posts_only
+            logger.info("Direct post scrape for %d usernames: %s", len(post_scrape_usernames), post_scrape_usernames)
+            # Build username→id map from DB
+            db_all = get_all_creators(conn, platform=platform)
+            username_to_id_direct: dict[str, int] = {
+                c.username.lower(): c.id for c in db_all if c.username
+            }
+            raw_posts, posts_cost = scrape_posts_only(platform, post_scrape_usernames, max_posts=max_posts)
+            apify_cost += posts_cost
+            for post in raw_posts:
+                owner = getattr(post, "_owner_username", None) or ""
+                cid = username_to_id_direct.get(owner.lower())
+                if cid:
+                    post.creator_id = cid
+                    upsert_post(conn, post)
+                else:
+                    logger.warning("Post descartado: username '%s' não encontrado no banco", owner)
+            logger.info("Direct post scrape complete: %d posts, cost $%.4f", len(raw_posts), posts_cost)
+            finish_run(conn, run_id, "completed", stats={"creators_found": len(post_scrape_usernames)})
+            return
+
         # ---------------------------------------------------------------
         # Step 1: Discovery
         # ---------------------------------------------------------------

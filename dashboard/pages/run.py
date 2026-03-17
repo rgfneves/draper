@@ -434,14 +434,17 @@ def render(conn) -> None:
         filtered_ids = [r["id"] for r in passed_rows] if passed_rows else []
         if filtered_ids:
             id_placeholders = ",".join(["%s"] * len(filtered_ids))
-            without_posts = conn.execute(
-                f"SELECT COUNT(*) FROM creators c "
+            no_posts_rows = conn.execute(
+                f"SELECT c.id, c.username FROM creators c "
                 f"WHERE c.id IN ({id_placeholders}) "
                 f"AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.creator_id = c.id)",
                 tuple(filtered_ids),
-            ).fetchone()[0]
+            ).fetchall()
+            without_posts = len(no_posts_rows)
+            usernames_without_posts = [r["username"] for r in no_posts_rows if r["username"]]
         else:
             without_posts = 0
+            usernames_without_posts = []
 
         c_s1, c_s2, c_stat2a, c_stat2b = st.columns([2, 2, 1, 1])
         with c_s1:
@@ -486,29 +489,19 @@ def render(conn) -> None:
         st.divider()
 
         def _build_scrape_args(skip_with_posts: bool) -> list[str]:
-            args = [
+            # Use direct post scrape for filtered creators already in DB (no rediscovery)
+            targets = usernames_without_posts if skip_with_posts else [
+                r["username"] for r in passed_rows if r["username"]
+            ]
+            capped = targets[:max_scrape]
+            if not capped:
+                return []
+            return [
                 _VENV_PYTHON, "-m", "pipeline.runner",
                 "--platform", platform,
-                "--scrape-only",
-                "--max-scrape", str(max_scrape),
-                "--max-posts",  str(max_posts),
-                "--min-followers", str(int(filt_min_f)),
+                "--post-scrape-usernames", ",".join(capped),
+                "--max-posts", str(max_posts),
             ]
-            if skip_with_posts:
-                args += ["--skip-with-posts"]
-            if selected_seed_ids:
-                args += ["--seed-ids", ",".join(str(i) for i in selected_seed_ids)]
-            if filt_keywords:
-                args += ["--excluded-keywords", "|".join(filt_keywords)]
-            if filt_excl_business:
-                args += ["--exclude-business"]
-            if filt_ratio > 0.0:
-                args += ["--min-follower-ratio", str(filt_ratio)]
-            if filt_require_email:
-                args += ["--require-email"]
-            if filt_excl_cats:
-                args += ["--excluded-categories", "|".join(filt_excl_cats)]
-            return args
 
         pwd4 = st.text_input(
             "Senha", type="password", key="scrape_posts_pwd",
@@ -537,6 +530,9 @@ def render(conn) -> None:
                     st.error("Senha incorreta.")
                 else:
                     scrape_args = _build_scrape_args(skip_with_posts=skip)
+                    if not scrape_args:
+                        st.warning("Nenhum creator para scrapar.")
+                        st.stop()
                     label_run = "novos creators" if skip else "todos os creators"
                     st.caption(f"`{' '.join(scrape_args[2:])}`")
                     with st.spinner(f"Scrapando posts de {label_run}…"):
