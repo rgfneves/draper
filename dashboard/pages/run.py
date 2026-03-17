@@ -802,16 +802,76 @@ def render(conn) -> None:
                 unsafe_allow_html=True,
             )
         with c_dl:
-            csv_df = df[["ai_filter_pass", "username", "display_name", "followers", "niche",
-                         "email", "link_in_bio", "epic_trip_score", "avg_engagement",
-                         "posts_last_30_days", "ai_filter_reason", "contacted_at"]].copy()
-            csv_df.columns = ["pass", "username", "display_name", "followers", "niche",
-                               "email", "link_in_bio", "score", "avg_engagement",
-                               "posts_last_30d", "ai_reason", "contacted_at"]
+            _export_ids = df["id"].tolist()
+            _placeholders = ",".join(["%s"] * len(_export_ids))
+            _export_rows = conn.execute(
+                f"""
+                SELECT
+                    c.platform,
+                    c.username,
+                    c.display_name,
+                    c.followers,
+                    c.following,
+                    c.total_posts,
+                    c.bio,
+                    c.email,
+                    c.link_in_bio,
+                    c.category,
+                    c.location,
+                    c.verified,
+                    c.business_account,
+                    c.niche,
+                    c.ai_filter_pass,
+                    c.ai_filter_reason,
+                    c.epic_trip_score,
+                    c.score_engagement,
+                    c.score_niche,
+                    c.score_followers,
+                    c.score_growth,
+                    c.score_activity,
+                    c.avg_engagement,
+                    c.posts_last_30_days,
+                    c.posting_frequency,
+                    c.is_active,
+                    c.status,
+                    c.discovered_via_type,
+                    c.discovered_via_value,
+                    c.first_seen_at,
+                    c.last_updated_at,
+                    o.last_contacted_at,
+                    COUNT(p.id)            AS posts_scraped_total,
+                    MAX(p.published_at)    AS last_post_date,
+                    AVG(p.likes)           AS avg_likes,
+                    AVG(p.comments)        AS avg_comments,
+                    AVG(p.views)           AS avg_views,
+                    AVG(p.engagement_rate) AS avg_post_er,
+                    string_agg(
+                        CASE WHEN p.caption IS NOT NULL
+                             THEN left(p.caption, 150) END,
+                        ' | '
+                        ORDER BY p.published_at DESC
+                    ) FILTER (WHERE p.caption IS NOT NULL) AS sample_captions
+                FROM creators c
+                LEFT JOIN posts p ON p.creator_id = c.id
+                LEFT JOIN (
+                    SELECT creator_id, MAX(contacted_at) AS last_contacted_at
+                    FROM outreach GROUP BY creator_id
+                ) o ON o.creator_id = c.id
+                WHERE c.id IN ({_placeholders})
+                GROUP BY c.id, o.last_contacted_at
+                ORDER BY c.epic_trip_score DESC NULLS LAST
+                """,
+                _export_ids,
+            ).fetchall()
+            _export_df = pd.DataFrame([dict(r) for r in _export_rows])
+            if not _export_df.empty and "ai_filter_pass" in _export_df.columns:
+                _export_df["ai_filter_pass"] = _export_df["ai_filter_pass"].map(
+                    {True: "pass", False: "fail"}
+                ).fillna("not_evaluated")
             st.download_button(
-                "⬇️ Exportar CSV",
-                csv_df.to_csv(index=False),
-                file_name=f"creators_{platform}.csv",
+                "⬇️ Exportar CSV completo",
+                _export_df.to_csv(index=False),
+                file_name=f"creators_{platform}_full.csv",
                 mime="text/csv",
                 use_container_width=True,
             )
