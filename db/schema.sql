@@ -99,3 +99,7 @@ CREATE TABLE IF NOT EXISTS outreach (
     status       TEXT,
     notes        TEXT
 );
+
+-- Performance: FK columns used in every pipeline analysis loop
+CREATE INDEX IF NOT EXISTS idx_posts_creator_id ON posts(creator_id);
+CREATE INDEX IF NOT EXISTS idx_score_history_creator_id ON score_history(creator_id);
