@@ -116,7 +116,11 @@ def render(conn) -> None:
         "email": "Email",
     }
 
-    display_df = df[display_cols].rename(columns=col_labels)
+    display_df = df[display_cols].copy().rename(columns=col_labels)
+    if "AI ✓" in display_df.columns:
+        display_df["AI ✓"] = display_df["AI ✓"].map(
+            {True: "✅ Pass", False: "❌ Fail"}
+        ).fillna("—")
 
     selection = st.dataframe(
         display_df,
@@ -189,4 +193,85 @@ def render(conn) -> None:
             )
 
     st.divider()
-    download_csv_button(df[display_cols], filename="draper_leads.csv")
+
+    # ── Export CSV completo (todas as colunas + agregados de posts + outreach) ──
+    export_ids = df["id"].tolist() if "id" in df.columns and not df.empty else []
+
+    if export_ids:
+        placeholders = ",".join(["%s"] * len(export_ids))
+        export_rows = conn.execute(
+            f"""
+            SELECT
+                c.platform,
+                c.username,
+                c.display_name,
+                c.followers,
+                c.following,
+                c.total_posts,
+                c.bio,
+                c.email,
+                c.link_in_bio,
+                c.category,
+                c.location,
+                c.verified,
+                c.business_account,
+                c.niche,
+                c.ai_filter_pass,
+                c.ai_filter_reason,
+                c.epic_trip_score,
+                c.score_engagement,
+                c.score_niche,
+                c.score_followers,
+                c.score_growth,
+                c.score_activity,
+                c.avg_engagement,
+                c.posts_last_30_days,
+                c.posting_frequency,
+                c.is_active,
+                c.is_lead,
+                c.status,
+                c.discovered_via_type,
+                c.discovered_via_value,
+                c.first_seen_at,
+                c.last_updated_at,
+                o.last_contacted_at,
+                COUNT(p.id)              AS posts_scraped_total,
+                MAX(p.published_at)      AS last_post_date,
+                AVG(p.likes)             AS avg_likes,
+                AVG(p.comments)          AS avg_comments,
+                AVG(p.views)             AS avg_views,
+                AVG(p.engagement_rate)   AS avg_post_er,
+                string_agg(
+                    CASE WHEN p.caption IS NOT NULL
+                         THEN left(p.caption, 150) END,
+                    ' | '
+                    ORDER BY p.published_at DESC
+                ) FILTER (WHERE p.caption IS NOT NULL) AS sample_captions
+            FROM creators c
+            LEFT JOIN posts p ON p.creator_id = c.id
+            LEFT JOIN (
+                SELECT creator_id, MAX(contacted_at) AS last_contacted_at
+                FROM outreach GROUP BY creator_id
+            ) o ON o.creator_id = c.id
+            WHERE c.id IN ({placeholders})
+            GROUP BY c.id, o.last_contacted_at
+            ORDER BY c.epic_trip_score DESC NULLS LAST
+            """,
+            export_ids,
+        ).fetchall()
+
+        export_df = pd.DataFrame([dict(r) for r in export_rows])
+        if not export_df.empty and "ai_filter_pass" in export_df.columns:
+            export_df["ai_filter_pass"] = export_df["ai_filter_pass"].map(
+                {True: "pass", False: "fail"}
+            ).fillna("not_evaluated")
+
+    else:
+        export_df = pd.DataFrame()
+
+    platform_tag = df["platform"].iloc[0] if not df.empty and "platform" in df.columns else "leads"
+    download_csv_button(
+        export_df,
+        filename=f"draper_{platform_tag}_export.csv",
+        label=f"⬇️ Exportar CSV completo ({len(export_df)} creators)",
+    )

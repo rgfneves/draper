@@ -498,28 +498,48 @@ def main(argv: list[str] | None = None) -> None:
                     logger.info("Skipping AI filter for creator %s (%s) — no posts", c.id, c.username)
                     continue
                 
-                captions_ai = [
-                    dict(r)["caption"] or ""
-                    for r in conn.execute(
-                        "SELECT caption FROM posts WHERE creator_id=%s LIMIT 10", (c.id,)
-                    ).fetchall()
-                ]
+                posts_rows_ai = conn.execute(
+                    "SELECT caption, hashtags, post_type, likes, comments, views, published_at "
+                    "FROM posts WHERE creator_id=%s ORDER BY published_at DESC LIMIT 10",
+                    (c.id,)
+                ).fetchall()
+
+                captions_ai: list[str] = []
                 hashtags_ai: list[str] = []
-                for row in conn.execute(
-                    "SELECT hashtags FROM posts WHERE creator_id=%s LIMIT 10", (c.id,)
-                ).fetchall():
+                posts_detail: list[dict] = []
+                for row in posts_rows_ai:
+                    r = dict(row)
+                    captions_ai.append(r.get("caption") or "")
                     try:
-                        tags = json.loads(row["hashtags"] or "[]")
+                        tags = json.loads(r.get("hashtags") or "[]")
                         hashtags_ai.extend(tags)
                     except (json.JSONDecodeError, TypeError):
                         pass
+                    posts_detail.append({
+                        "post_type": r.get("post_type"),
+                        "likes": r.get("likes"),
+                        "comments": r.get("comments"),
+                        "views": r.get("views"),
+                        "published_at": str(r.get("published_at") or ""),
+                        "caption": r.get("caption") or "",
+                    })
+
                 to_filter.append(
                     {
                         "id": c.id,
                         "bio": c.bio or "",
                         "niche": c.niche or "",
+                        "display_name": c.display_name or "",
+                        "followers": c.followers or 0,
+                        "category": c.category or "",
+                        "location": c.location or "",
+                        "link_in_bio": c.link_in_bio or "",
+                        "business_account": bool(c.business_account),
+                        "avg_engagement": c.avg_engagement or 0.0,
+                        "posts_last_30_days": c.posts_last_30_days or 0,
                         "captions": captions_ai,
                         "hashtags": hashtags_ai,
+                        "posts_detail": posts_detail,
                     }
                 )
 
